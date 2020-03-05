@@ -3,15 +3,17 @@ using System;
 using ElecWarehouse.Models;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 namespace ElecWarehouse.Migrations
 {
     [DbContext(typeof(DatabaseContext))]
-    partial class DatabaseContextModelSnapshot : ModelSnapshot
+    [Migration("20200304201011_AddedLocationItemTableandFKs")]
+    partial class AddedLocationItemTableandFKs
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -101,7 +103,7 @@ namespace ElecWarehouse.Migrations
 
                     b.HasIndex("LocationId");
 
-                    b.ToTable("LocationsItems");
+                    b.ToTable("LocationItem");
                 });
 
             modelBuilder.Entity("ElecWarehouse.LocationItem", b =>

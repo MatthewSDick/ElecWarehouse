@@ -9,6 +9,8 @@ namespace ElecWarehouse.Models
   {
 
     public DbSet<Item> Items { get; set; }
+    public DbSet<Location> Locations { get; set; }
+    public DbSet<LocationItem> LocationsItems { get; set; }
     private string ConvertPostConnectionToConnectionString(string connection)
     {
       var _connection = connection.Replace("postgres://", String.Empty);
