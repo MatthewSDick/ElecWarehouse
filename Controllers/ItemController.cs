@@ -8,17 +8,6 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
-/*
-
-Update the PUT endpoint that allows a user/client to update an item for a location = Make a new endpoint for this not an update
-Update the PUT endpoint that allows a user/client to update an item for a location
-Update the DELETE endpoint that allows a user/client to delete an item for a location
-Add a new GET endpoint to get all items that are out of stock for a location. Keep you old GET endpoint for out of stock, but create a new one
-Update the GET endpoint that allows the user to search for an item based on SKU, and this should search all the locations.
-Deploy your update to Heroku
-
-*/
-
 namespace ElecWarehouse.Controllers
 {
   [Route("api/[controller]")]
@@ -27,7 +16,14 @@ namespace ElecWarehouse.Controllers
   {
     public DatabaseContext db { get; set; } = new DatabaseContext();
 
-    [HttpGet("locate/{id}")]
+    [HttpGet]
+    public List<Item> GetEverything()
+    {
+      var allItems = db.Items.OrderBy(m => m.Name);
+      return allItems.ToList();
+    }
+
+    [HttpGet("all_by_location/{id}")]
     public async Task<ActionResult<List<Item>>> GetAllItems(int id)
     {
       //Create a GET endpoint for all items in your inventory
@@ -44,20 +40,80 @@ namespace ElecWarehouse.Controllers
     }
 
     [HttpGet("{itemId}/{locationID}")]
-    //[HttpGet("item_by_location/{itemId, locationID}")]
-    public Item GetSingleItem(int itemId, int locationId)
+    public async Task<ActionResult<Item>> GetSingleItem(int itemId, int locationId)
     {
-      //Create a GET endpoint for each item
-      //var locationItem = db.LocationsItems.FirstOrDefault(i => i.LocationId == locationId && i.ItemId == itemId).Item;
-      //var locationItem = db.LocationsItems.FirstOrDefault(i => i.ItemId == itemId).Item;
+      var item = await db.LocationsItems.Include(i => i.Item).Where(i => i.LocationId == locationId && i.ItemId == itemId).Select(s => s.Item).FirstOrDefaultAsync();
+      if (item == null)
+      {
+        return NotFound(new { text = "There are no records - " });
+      }
+      else
+      {
+        return Ok(item);
+      }
 
-      //var locationItem = electricCityDb.InventoryItems.Include(item => item.LocationItems.Where(loc => loc.LocationID == locationId && loc.InventoryItemID == id));
-      // var locationItem = db.Items.Include(i => i.LocationItems.Where(l => l.LocationId == locationId && l.ItemId == itemId)).FirstOrDefault();
-      var item = db.LocationsItems.Include(i => i.Item).Where(i => i.LocationId == locationId && i.ItemId == itemId).Select(s => s.Item).FirstOrDefault();
-      return item;
+
     }
 
+    [HttpGet("out_of_stock")] // Works from Heroku
+    public ActionResult GetOutOfStock()
+    {
+      //Create a GET endpoint to get all items that are out of stock
+      var allGone = db.Items.Where(p => p.NumberInStock < 1);
 
+      return new ContentResult()
+      {
+        Content = JsonSerializer.Serialize(allGone),
+        ContentType = "application/json",
+        StatusCode = 200
+      };
+    }
+
+    [HttpGet("location_out_of_stock/{location}")]
+    public async Task<ActionResult<List<Item>>> LocationGetOutOfStock(int location)
+    {
+      var allGone = await db.LocationsItems.Include(i => i.Item).Where(l => l.LocationId == location && l.NumberInStock == 0).Select(s => s.Item).FirstOrDefaultAsync();
+
+      if (allGone == null)
+      {
+        return NotFound(new { text = "There are no records - " + DateTime.Now });
+      }
+      else
+      {
+        //return Ok(allGone);
+        return new ContentResult()
+        {
+          Content = JsonSerializer.Serialize(allGone),
+          ContentType = "application/json",
+          StatusCode = 200
+        };
+      }
+
+
+
+
+
+
+
+
+
+      //return allGone();
+
+    }
+
+    [HttpGet("find_item/{SKU}")]
+    public ActionResult FindItem(string SKU)
+    {
+      //Create a GET endpoint to get all items that are out of stock
+      var foundItem = db.Items.Where(p => p.SKU == SKU);
+
+      return new ContentResult()
+      {
+        Content = JsonSerializer.Serialize(foundItem),
+        ContentType = "application/json",
+        StatusCode = 200
+      };
+    }
 
     [HttpPost("{location}/{count}")]
     public async Task<ActionResult<Item>> AddItem(Item item, int location, int count)
@@ -77,17 +133,44 @@ namespace ElecWarehouse.Controllers
     }
 
     [HttpPut("update_item/{id}")]
-    public Item UpdateItem(int id, Item newData)
+    public async Task<Item> UpdateItem(int id, Item newData)
     {
       //Create a PUT endpoint that allows a client to update an item
       newData.Id = id;
       db.Entry(newData).State = EntityState.Modified;
-      db.SaveChanges();
+      await db.SaveChangesAsync();
       return newData;
     }
 
+    [HttpPut("update_location_item/{id}/{location}")]
+    public Item UpdateItem(int location, int id, Item newData)
+    {
+      var toUpdate = db.LocationsItems.Include(i => i.Item).Where(i => i.LocationId == location && i.ItemId == id).Select(s => s.Item).FirstOrDefault();
+
+      db.Items.AddRange(toUpdate);
+      db.SaveChangesAsync();
+      return newData;
+
+    }
+
+    [HttpGet("sample/{itemId}/{locationID}")]
+    public async Task<ActionResult<Item>> Sample(int itemId, int locationId)
+    {
+      var item = await db.LocationsItems.Include(i => i.Item).Where(i => i.LocationId == locationId && i.ItemId == itemId).Select(s => s.Item).FirstOrDefaultAsync();
+      if (item == null)
+      {
+        return NotFound(new { text = "There are no records - " });
+      }
+      else
+      {
+        return Ok(item);
+      }
+
+
+    }
+
     [HttpDelete("{id}")]
-    public ActionResult DeleteItem(int id)
+    public async Task<ActionResult> DeleteItem(int id)
     {
       //Create a DELETE endpoint that allows a client to delete an item
       var toDelete = db.Items.FirstOrDefault(p => p.Id == id);
@@ -96,40 +179,24 @@ namespace ElecWarehouse.Controllers
         return NotFound();
       }
       db.Items.Remove(toDelete);
-      db.SaveChanges();
+      await db.SaveChangesAsync();
       return Ok();
     }
 
-    [HttpGet("out_of_stock")]
-    public ActionResult GetOutOfStock()
+    [HttpDelete("item_from_location/{id}/{location}")]
+    public async Task<ActionResult> DeleteItem(int id, int location)
     {
-      //Create a GET endpoint to get all items that are out of stock
-      var allGone = db.Items.Where(p => p.NumberInStock < 1);
-
-      return new ContentResult()
+      //Create a DELETE endpoint that allows a client to delete an item
+      var toDelete = db.LocationsItems.FirstOrDefault(i => i.LocationId == location && i.ItemId == id);
+      if (toDelete == null)
       {
-        Content = JsonSerializer.Serialize(allGone),
-        ContentType = "application/json",
-        StatusCode = 200
-      };
+        return NotFound();
+      }
+      db.LocationsItems.Remove(toDelete);
+      await db.SaveChangesAsync();
+      return Ok();
     }
 
-    [HttpGet("find_item/{SKU}")]
-    public ActionResult FindItem(string SKU)
-    {
-      //Create a GET endpoint to get all items that are out of stock
-      var foundItem = db.Items.Where(p => p.SKU == SKU);
-
-      return new ContentResult()
-      {
-        Content = JsonSerializer.Serialize(foundItem),
-        ContentType = "application/json",
-        StatusCode = 200
-      };
-    }
-
-
-    //Create a GET endpoint that allows them to search for an item based on SKU
 
   }
 }
